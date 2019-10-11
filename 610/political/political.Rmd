@@ -1,0 +1,170 @@
+---
+title: "Homework 3"
+author: "Corey Maxedon"
+date: "9/26/2019"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+library(dplyr)
+library(plyr)
+library(reshape)
+```
+
+
+## Question 1
+
+```{r read files}
+#Load in data frames
+bills = read.csv("https://jfukuyama.github.io/teaching/stat610/assignments/bills.csv",
+                 stringsAsFactors = FALSE)
+members = read.csv("https://jfukuyama.github.io/teaching/stat610/assignments/members.csv",
+                   stringsAsFactors = TRUE)
+votes = read.csv("https://jfukuyama.github.io/teaching/stat610/assignments/votes.csv",
+                 row.names = 1,
+                 stringsAsFactors = FALSE)
+
+```
+
+This chunk produces the data frames I need for the rest of this exercise.
+
+
+## Question 2
+
+```{r}
+#Function to count number of times a members name was mentioned
+activity = function(mem) {
+  member_mention_index = grep(mem, bills$subject)
+  activity_level = length(member_mention_index)
+}
+
+#Run function on all members
+members$members_activity = sapply(members$last_name, activity)
+head(members, n = 10)
+
+```
+
+This chunk creates a function that finds each members activity level based on their name being mentioned in the subject line. Once I had the function, I was able to use sapply to run the function on each member using their last name as input. The output I wanted was a vector which is what sapply gave me.
+
+
+## Question 3
+
+```{r}
+#Function to count Yea votes
+num_votes = function(vote) {
+  return(length(grep("Yea", vote)))
+}
+
+#Run function on all bills
+votes_per_bill = ldply(votes, num_votes)
+colnames(votes_per_bill) <- c("vote_id", "num_votes")
+head(votes_per_bill, n = 10)
+
+```
+
+This chunk provides the number of Yea votes for each given bill. I chose to use ldply on my function that counts Yea's, because I knew I wanted a data frame as output. This means I just needed to know how I wanted to input the data. It became obvious after some trial and error that I needed to treat my input data as a list. This wasn't clear at first since the data was in a data frame, but I just treated my data frame as a list.
+
+
+## Question 4
+
+```{r}
+#Function to convert string fractions to fractions then number of votes needed to pass
+str_votes = function(x) {
+  frac_req = eval(parse(text = x))
+  num_votes_req = ceiling(frac_req*(length(members[, 1])-1))
+  return(num_votes_req)
+}
+
+#Runs function on all fractions and returns required votes
+bills$votes_req = sapply(bills$requires, str_votes)
+head(cbind(bills$vote_id, bills$votes_req), n = 10)
+
+```
+
+This chunk takes a fraction as a string, converts it to decimal form and then, multiples this value by the number of congressmen minus one. The speaker of the house does not vote unless there is a tie. Next, I rounded this value up since 2/3 vote should be 67 votes, but the math comes out to 66.6666. Once I created this function, I used sapply to use this function on a vector of data. sapply was able to give me a vector as output which I needed.
+
+
+## Question 5
+
+```{r}
+#Creating Dataframe of passing bills
+pass_df = data.frame("vote_id" = bills$vote_id, "vote_req" = bills$votes_req)
+pass_df = merge(votes_per_bill, pass_df)
+pass_df$diff = pass_df$num_votes - pass_df$vote_req
+pass_df$pass[pass_df$diff > 0] = "Yea"
+pass_df$pass[is.na(pass_df$pass)] = "Nay"
+
+
+#Fraction of Correctness function
+vote_ratio = function(mem) {
+  #Creating Senator vote data frame
+  sen_vote_df = data.frame(t(votes[mem,]))
+  colnames(sen_vote_df) <- c("mem_id")
+  sen_vote_df$vote_id = rownames(sen_vote_df)
+  
+  #Ratio of correctness
+  sen_vote_df = merge(sen_vote_df, pass_df)
+  ratio_align = length(sen_vote_df$vote_id[sen_vote_df$mem_id == sen_vote_df$pass])/
+    length(sen_vote_df$vote_id)
+  
+  return(ratio_align)
+}
+
+#Run function on all members
+members$frac_correct = laply(members$id, vote_ratio)
+head(cbind(members$last_name, members$frac_correct), n = 10)
+
+```
+
+I start this chunk out by making a dataframe of whether of not a bill passed. Yea means it passed, which meant the difference between the actual number of votes and the number of required votes was positive and not zero. Zero would mean a tie which is not a pass. Next, I created a function that makes a data frame of a certain Senator's vote. The function then merges the Senator's vote and whether or not the bill passed. Since I made a pass be Yea and not be Nay, I was able to say when these two are equal on a bill, I should count. This is true. If a Senator doesn't vote, that should not count as voting against a bill. Once I have this information, I returned the fraction of alignment. I used laply to run this function on all members. I took members as a list, ran the function I created, then output a vector to be assigned to a column in members.
+
+
+## Question 6
+
+```{r}
+#Function to regress each subgroup
+reg_activity = function(dsub) {
+  reg = lm(frac_correct ~ members_activity, data = dsub)
+  sum.reg = summary(reg)
+  return(sum.reg)
+}
+
+#Regression summary for each group
+regs = dlply(members, .(party), reg_activity)
+#Regression for Republicans
+r_reg = regs$R
+#Regression for Democrats
+d_reg = regs$D
+
+```
+
+This chunk runs a function to complete a regression with fraction of alignment as the response and activity of the members as the predictor. I used dlply to subset the dataframe and run the regression on each group. dlply was able to let me subset my input data frame and output the results as a list which is exactly what I wanted. Each summary is below.
+
+
+```{r}
+print("This is the regression for the Republican group.")
+r_reg
+```
+
+This is the regression for the Republican group. The coefficient for activity of the Republican party was significant with a 90% confidence. This suggests there is a negative relationship for Republicans who are more active to vote for passing bills. 
+
+
+```{r}
+print("This is the regression for the Democrat group.")
+d_reg
+```
+
+This is the regression for the Democrat group. The coefficient for activity of the Democratic party was significant with a 99% confidence. This is much more significant than the previous regression. This suggests there is a strong negative relationship for Democrats who are more active to vote for passing bills.
+
+This is purely speculation, but it seems a more active politician will be more likely to follow their own opinion rather than follow the majority. Based on the significance of each model, it is likely Democrats exhibit this habit more than Republicans.
+
+
+
+
+
+
+
+
+
+
+
