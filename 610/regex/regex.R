@@ -1,7 +1,7 @@
 library(readr)
 
 #Dataframe setup
-list_books <- list.files('books')
+list_books <- download.file("https://github.com/coreymaxedon/projects/tree/master/610/regex/books")
 list_book_files <- paste("books/",
                          list_books,
                          sep = "")
