@@ -1,7 +1,10 @@
 library(readr)
 
 #Dataframe setup
-list_books <- download.file("https://github.com/coreymaxedon/projects/tree/master/610/regex/books")
+download.file("https://github.com/coreymaxedon/projects/raw/master/610/regex/books.zip", dest="books.zip", mode="wb") 
+unzip ("books.zip", exdir = ".")
+
+list_books <- list.files('books')
 list_book_files <- paste("books/",
                          list_books,
                          sep = "")
@@ -41,7 +44,7 @@ book_info_to_df <- function(book_number,df) {
   df[book_number, "n_individuals"] = length(n_individuals)
   
   #Print out of names
-  print("The individuals in this book are:")
+  cat("The characters in", final_title,"are:\n")
   print(n_individuals)
   
   #Returns this books set of information
@@ -55,3 +58,8 @@ for (i in 1:21) {
 
 #Prints final DF
 print(df)
+
+#Delete Books Folder
+unlink(c("books","books.zip"), recursive = TRUE)
+
+       
